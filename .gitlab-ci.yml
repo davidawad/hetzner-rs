@@ -1,0 +1,30 @@
+image: rust:1.99
+
+stages:
+  - verify
+
+variables:
+  CARGO_TERM_COLOR: always
+
+fmt:
+  stage: verify
+  script:
+    - cargo fmt --all -- --check
+    - cargo fmt --manifest-path tools/generate/Cargo.toml -- --check
+
+clippy:
+  stage: verify
+  script:
+    - cargo clippy --all-targets -- -D warnings
+    - cargo clippy --manifest-path tools/generate/Cargo.toml --all-targets -- -D warnings
+
+test:
+  stage: verify
+  script:
+    - cargo test --all-targets
+    - cargo test --manifest-path tools/generate/Cargo.toml
+
+doc:
+  stage: verify
+  script:
+    - RUSTDOCFLAGS="-D warnings -A rustdoc::invalid-rust-codeblocks" cargo doc --no-deps

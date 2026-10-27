@@ -1,0 +1,255 @@
+#!/usr/bin/env bash
+# Regenerate hetzner-rs when Hetzner publishes a new Cloud API spec.
+#
+# Runs standalone on a Linux host (the scheduled regen host), not in
+# GitLab CI. Work happens in a temporary git worktree of origin/main so the
+# invoking checkout is never modified:
+#
+#   1. fetch the spec and compare its SHA-256 with spec/REVISION
+#   2. regenerate with the pinned progenitor (tools/generate)
+#   3. cargo fmt --check, clippy -D warnings, tests (crate and generator)
+#   4. choose the version bump with cargo-semver-checks against the last
+#      release tag: patch if the generated API is unchanged, minor if it is
+#      additive, major if it breaks
+#   5. commit to main, tag v<semver>+api.<revision>, push both
+#
+# Requires git, curl, sha256sum and a Rust toolchain with rustfmt/clippy.
+# On failure it prints the failing step and exits nonzero; with
+# GITLAB_TOKEN set and glab installed it also opens a GitLab issue.
+set -Eeuo pipefail
+
+readonly spec_url="${REGEN_SPEC_URL:-https://docs.hetzner.cloud/cloud.spec.json}"
+readonly remote="${REGEN_REMOTE:-origin}"
+readonly branch="${REGEN_BRANCH:-main}"
+readonly gitlab_repo="${REGEN_GITLAB_REPO:-davidawad/hetzner-rs}"
+readonly semver_checks_version="0.51.0"
+
+usage() {
+    cat <<'EOF'
+Usage: scripts/regen [--dry-run] [--force] [--spec-file FILE] [--keep-worktree]
+
+  --dry-run        regenerate and verify, but do not commit, tag or push
+  --force          regenerate even if the spec hash matches spec/REVISION
+  --spec-file FILE use FILE instead of downloading the spec
+  --keep-worktree  leave the temporary worktree in place for inspection
+
+Environment: REGEN_SPEC_URL, REGEN_REMOTE (origin), REGEN_BRANCH (main),
+REGEN_TOOLS_DIR (cargo-semver-checks install root), CARGO_TARGET_DIR,
+GITLAB_TOKEN + REGEN_GITLAB_REPO (open an issue on failure via glab).
+EOF
+}
+
+dry_run=0
+force=0
+keep_worktree=0
+spec_file=""
+while (($#)); do
+    case "$1" in
+        --dry-run) dry_run=1 ;;
+        --force) force=1 ;;
+        --keep-worktree) keep_worktree=1 ;;
+        --spec-file)
+            [[ $# -ge 2 ]] || { usage >&2; exit 2; }
+            spec_file="$(realpath "$2")"
+            shift
+            ;;
+        -h | --help) usage; exit 0 ;;
+        *) echo "regen: unknown argument: $1" >&2; usage >&2; exit 2 ;;
+    esac
+    shift
+done
+
+step="setup"
+log() { printf 'regen: %s\n' "$*"; }
+run_step() {
+    step="$1"
+    shift
+    log "$step"
+    "$@"
+}
+
+repo_root="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
+readonly repo_root
+work_dir="$(mktemp -d "${TMPDIR:-/tmp}/hetzner-rs-regen.XXXXXX")"
+worktree="$work_dir/tree"
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$repo_root/target/regen}"
+tools_dir="${REGEN_TOOLS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/hetzner-rs-regen}"
+
+open_issue() {
+    [[ -n "${GITLAB_TOKEN:-}" ]] || return 0
+    if ! command -v glab >/dev/null; then
+        log "GITLAB_TOKEN is set but glab is not installed; no issue opened"
+        return 0
+    fi
+    local description
+    printf -v description 'scripts/regen failed on %s at step: %s\n\nSee the journal of the regen unit for the full log.' \
+        "$(hostname)" "$step"
+    GITLAB_TOKEN="$GITLAB_TOKEN" glab issue create --repo "$gitlab_repo" \
+        --title "regen failed: $step" --description "$description" --yes >/dev/null ||
+        log "could not open a GitLab issue"
+}
+
+cleanup() {
+    local status=$?
+    trap - EXIT
+    if ((status != 0)); then
+        printf 'regen: FAILED at step "%s" (exit %d)\n' "$step" "$status" >&2
+        open_issue
+    fi
+    if ((keep_worktree)); then
+        log "worktree kept at $worktree"
+    else
+        git -C "$repo_root" worktree remove --force "$worktree" 2>/dev/null || true
+        rm -rf "$work_dir"
+    fi
+    exit "$status"
+}
+trap cleanup EXIT
+
+revision_field() {
+    [[ -f "$worktree/spec/REVISION" ]] || return 0
+    sed -n "s/^$1: *//p" "$worktree/spec/REVISION" | head -n 1
+}
+
+fetch_spec() {
+    if [[ -n "$spec_file" ]]; then
+        cp "$spec_file" "$work_dir/cloud.spec.json"
+    else
+        curl --fail --location --silent --show-error --retry 3 \
+            --output "$work_dir/cloud.spec.json" "$spec_url"
+    fi
+}
+
+# Bump the [package] version in Cargo.toml and the lockfile entry.
+set_version() {
+    sed -i "0,/^version = \".*\"/s//version = \"$1\"/" "$worktree/Cargo.toml"
+    (cd "$worktree" && cargo update --workspace --offline --quiet)
+}
+
+write_revision() {
+    local progenitor
+    progenitor="$(sed -n 's/^progenitor = .*version = "=\([^"]*\)".*/\1/p' \
+        "$worktree/tools/generate/Cargo.toml")"
+    cat >"$worktree/spec/REVISION" <<EOF
+revision: ${new_sha:0:12}
+sha256: $new_sha
+source: $spec_url
+fetched: $(date -u +%F)
+generator: progenitor $progenitor (tools/generate)
+EOF
+}
+
+verify() (
+    cd "$worktree"
+    cargo fmt --all -- --check
+    cargo fmt --manifest-path tools/generate/Cargo.toml -- --check
+    cargo clippy --locked --all-targets -- -D warnings
+    cargo clippy --locked --manifest-path tools/generate/Cargo.toml --all-targets -- -D warnings
+    cargo test --locked --all-targets
+    cargo test --locked --manifest-path tools/generate/Cargo.toml
+)
+
+ensure_semver_checks() {
+    semver_checks="$tools_dir/bin/cargo-semver-checks"
+    if [[ ! -x "$semver_checks" ]] ||
+        [[ "$("$semver_checks" --version)" != "cargo-semver-checks $semver_checks_version" ]]; then
+        cargo install --locked --root "$tools_dir" cargo-semver-checks \
+            --version "$semver_checks_version"
+    fi
+}
+
+# Sets $bump to patch, minor or major relative to the release tag $1.
+choose_bump() {
+    if git -C "$worktree" diff --quiet "$1" -- src; then
+        bump="patch"
+        return
+    fi
+    ensure_semver_checks
+    # For 0.y.z cargo treats a patch release as the compatible one.
+    local level=minor
+    [[ "$base_version" == 0.* ]] && level="patch"
+    # Exit 100 means semver violations; anything else nonzero is an error.
+    local status=0
+    (cd "$worktree" && "$semver_checks" semver-checks check-release \
+        --baseline-rev "$1" --release-type "$level") || status=$?
+    case "$status" in
+        0) bump=minor ;;
+        100) bump=major ;;
+        *) return "$status" ;;
+    esac
+}
+
+next_version() {
+    local major minor patch
+    IFS=. read -r major minor patch <<<"$base_version"
+    case "$bump" in
+        major) echo "$((major + 1)).0.0" ;;
+        minor) echo "$major.$((minor + 1)).0" ;;
+        patch) echo "$major.$minor.$((patch + 1))" ;;
+    esac
+}
+
+run_step "fetch $remote/$branch and tags" \
+    git -C "$repo_root" fetch --quiet --tags "$remote" "$branch"
+run_step "create worktree" \
+    git -C "$repo_root" worktree add --quiet --detach "$worktree" "$remote/$branch"
+step="check $remote/$branch layout"
+if [[ ! -f "$worktree/tools/generate/Cargo.toml" ]]; then
+    echo "regen: $remote/$branch has no tools/generate; land the generator first" >&2
+    exit 1
+fi
+run_step "fetch spec" fetch_spec
+
+new_sha="$(sha256sum "$work_dir/cloud.spec.json" | cut -d' ' -f1)"
+old_sha="$(revision_field sha256)"
+if [[ "$new_sha" == "$old_sha" ]] && ((!force)); then
+    log "spec unchanged (sha256 $new_sha); nothing to do"
+    exit 0
+fi
+log "spec sha256 ${old_sha:-<none>} -> $new_sha"
+
+cp "$work_dir/cloud.spec.json" "$worktree/spec/cloud.spec.json"
+write_revision
+run_step "regenerate client" \
+    cargo run --locked --quiet --manifest-path "$worktree/tools/generate/Cargo.toml"
+run_step "verify fmt, clippy and tests" verify
+
+step="choose version"
+base_tag="$(git -C "$repo_root" tag --list 'v[0-9]*' --merged "$remote/$branch" \
+    --sort=-version:refname | head -n 1)"
+if [[ -z "$base_tag" ]]; then
+    version="$(sed -n 's/^version = "\(.*\)"/\1/p' "$worktree/Cargo.toml" | head -n 1)"
+    log "no release tag yet; releasing Cargo.toml version $version"
+else
+    base_version="${base_tag#v}"
+    base_version="${base_version%%+*}"
+    run_step "semver check against $base_tag" choose_bump "$base_tag"
+    version="$(next_version)"
+    log "$bump bump: $base_version -> $version"
+fi
+revision="$(revision_field revision)"
+tag="v$version+api.$revision"
+case "${bump:-minor}" in
+    major) subject="feat(api)!: regenerate for Hetzner API revision $revision" ;;
+    minor) subject="feat(api): regenerate for Hetzner API revision $revision" ;;
+    patch) subject="chore(api): refresh Hetzner API spec to revision $revision" ;;
+esac
+
+step="set version"
+set_version "$version"
+
+if ((dry_run)); then
+    log "dry run: Cargo.toml version $version; would commit \"$subject\", tag $tag and push to $remote/$branch"
+    git -C "$worktree" status --short
+    exit 0
+fi
+
+step="commit and tag"
+git -C "$worktree" add -A
+git -C "$worktree" commit --quiet -m "$subject" -m "Spec sha256: $new_sha
+Source: $spec_url
+Release: $tag"
+git -C "$worktree" tag -a "$tag" -m "hetzner-rs $version (Hetzner API revision $revision)"
+run_step "push $branch and $tag" \
+    git -C "$worktree" push --quiet --atomic "$remote" "HEAD:refs/heads/$branch" "refs/tags/$tag"
+log "released $tag"

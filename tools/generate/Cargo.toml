@@ -1,0 +1,15 @@
+[package]
+name = "hetzner-rs-generate"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+openapiv3 = "=2.2.0"
+progenitor = { version = "=0.15.1", default-features = false }
+prettyplease = "=0.2.37"
+serde_json = { version = "=1.0.154", features = ["preserve_order"] }
+syn = { version = "=2.0.117", features = ["full"] }
+
+[lints.rust]
+unsafe_code = "forbid"

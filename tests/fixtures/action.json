@@ -1,0 +1,10 @@
+{
+  "command": "create_server",
+  "error": null,
+  "finished": "2026-10-18T08:00:00Z",
+  "id": 42,
+  "progress": 100,
+  "resources": [{ "id": 17, "type": "server" }],
+  "started": "2026-10-18T07:59:00Z",
+  "status": "success"
+}

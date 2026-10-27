@@ -1,0 +1,24 @@
+[package]
+name = "hetzner-rs"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Generated async and blocking Rust clients for the Hetzner Cloud API"
+repository = "https://github.com/davidawad/hetzner-rs"
+publish = false
+
+[lib]
+doctest = false
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+progenitor-client = "0.15"
+reqwest = { version = "0.13", default-features = false, features = ["json", "query", "stream", "rustls"] }
+regress = "0.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+tokio = { version = "1.52", features = ["rt-multi-thread", "time"] }
+
+[lints.rust]
+unsafe_code = "forbid"

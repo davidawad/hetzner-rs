@@ -1,0 +1,7 @@
+{
+  "name": {"type": "string", "description": "nullable string", "nullable": true},
+  "ids": {"type": "array", "items": {"type": "integer", "nullable": true}, "nullable": true},
+  "mixed": {"title": "Mixed", "anyOf": [{"type": "string"}, {"type": "integer"}, {"type": "null"}]},
+  "only_null": {"type": ["null"]},
+  "plain": {"type": "object"}
+}

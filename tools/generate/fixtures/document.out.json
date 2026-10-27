@@ -1,0 +1,18 @@
+{
+  "openapi": "3.0.3",
+  "info": {"title": "Fixture", "version": "1"},
+  "tags": [{"name": "Servers"}],
+  "paths": {
+    "/servers": {
+      "parameters": [{"name": "page", "in": "query", "schema": {"type": "integer", "example": 1}}],
+      "x-internal": false,
+      "get": {"operationId": "list_servers", "tags": ["Servers"], "responses": {"200": {"description": "ok", "content": {"application/json": {"schema": {"type": "object", "nullable": true}}}}}}
+    }
+  },
+  "components": {
+    "schemas": {"Id": {"type": "integer", "enum": [1]}},
+    "responses": {"Empty": {"description": "empty"}},
+    "parameters": {},
+    "requestBodies": {}
+  }
+}

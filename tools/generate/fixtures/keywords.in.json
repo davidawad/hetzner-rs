@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "item",
+  "$comment": "dropped",
+  "type": "object",
+  "properties": {
+    "count": {"type": "integer", "exclusiveMinimum": 0, "exclusiveMaximum": 10.5},
+    "legacy": {"type": "integer", "minimum": 1, "exclusiveMinimum": true}
+  }
+}

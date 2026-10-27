@@ -1,0 +1,18 @@
+Hetzner Cloud API specification notice
+======================================
+
+The file spec/cloud.spec.json is a verbatim snapshot downloaded from
+https://docs.hetzner.cloud/cloud.spec.json on 2026-10-18.
+
+OpenAPI info.license is absent from that document, and the documentation page
+does not state a license for the specification. The snapshot (revision recorded
+in spec/REVISION) is retained for reproducible local generation. Generated
+src/client.rs and spec/cloud.openapi-3.0.json derive from that document; their
+terms are Hetzner's, not this repository's. David Awad publishes this
+repository under the MIT license on his own ruling about that uncertainty.
+
+Snapshot revision (SHA-256):
+0f7f538a1d760d2e09a34a33ab411a9e29b52102721a2c4986aaf51cdb188c5d
+
+Original repository code is licensed MIT; see LICENSE. That license does not
+grant any rights Hetzner has in its specification.

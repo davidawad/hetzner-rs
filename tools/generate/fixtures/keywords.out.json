@@ -1,0 +1,7 @@
+{
+  "type": "object",
+  "properties": {
+    "count": {"type": "integer", "exclusiveMinimum": true, "exclusiveMaximum": true, "minimum": 0, "maximum": 10.5},
+    "legacy": {"type": "integer", "minimum": 1, "exclusiveMinimum": true}
+  }
+}

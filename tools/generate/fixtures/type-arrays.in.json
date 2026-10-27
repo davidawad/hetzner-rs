@@ -1,0 +1,7 @@
+{
+  "name": {"type": ["string", "null"], "description": "nullable string"},
+  "ids": {"type": ["array", "null"], "items": {"type": ["integer", "null"]}},
+  "mixed": {"type": ["string", "integer", "null"], "title": "Mixed"},
+  "only_null": {"type": ["null"]},
+  "plain": {"type": "object"}
+}

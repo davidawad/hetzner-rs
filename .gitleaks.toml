@@ -1,0 +1,22 @@
+# gitleaks config for hetzner-rs (release-prep, project-release step 2).
+# Default rules stay on. Two path-scoped allowlists cover Hetzner's own API
+# documentation examples, which are placeholders, not secrets:
+#  - the vendored upstream OpenAPI spec (example API keys, and an example
+#    "-----BEGIN PRIVATE KEY-----\n..." in the Certificate schema);
+#  - the getting-started curl example (placeholder token) that the generator
+#    copies from the spec into src/client.rs doc comments.
+# Anything else in these files, or any other rule, still fails the scan.
+title = "hetzner-rs"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Upstream Hetzner OpenAPI spec: documentation example keys and PEM placeholders"
+targetRules = ["generic-api-key", "private-key"]
+paths = ['''^spec/[^/]+\.json$''']
+
+[[allowlists]]
+description = "Generated doc comment carrying the upstream getting-started curl example (placeholder token)"
+targetRules = ["curl-auth-header"]
+paths = ['''^src/client\.rs$''']

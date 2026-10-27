@@ -1,0 +1,5 @@
+revision: 0f7f538a1d76
+sha256: 0f7f538a1d760d2e09a34a33ab411a9e29b52102721a2c4986aaf51cdb188c5d
+source: https://docs.hetzner.cloud/cloud.spec.json
+fetched: 2026-10-18
+generator: progenitor 0.15.1 (tools/generate)

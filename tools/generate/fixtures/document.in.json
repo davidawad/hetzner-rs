@@ -1,0 +1,23 @@
+{
+  "openapi": "3.1.2",
+  "info": {"title": "Fixture", "version": "1"},
+  "jsonSchemaDialect": "https://spec.openapis.org/oas/3.1/dialect/base",
+  "tags": [{"name": "Servers"}, {"name": "Volumes"}],
+  "paths": {
+    "/servers": {
+      "get": {"operationId": "list_servers", "tags": ["Servers"], "responses": {"200": {"description": "ok", "content": {"application/json": {"schema": {"type": ["object", "null"]}}}}}},
+      "post": {"operationId": "create_volume_on_server", "tags": ["Volumes"], "responses": {}},
+      "parameters": [{"name": "page", "in": "query", "schema": {"type": "integer", "examples": [1]}}],
+      "x-internal": false
+    },
+    "/volumes": {
+      "summary": "Volumes",
+      "get": {"operationId": "list_volumes", "tags": ["Volumes"], "responses": {}}
+    },
+    "/untagged": {"get": {"operationId": "untagged", "responses": {}}}
+  },
+  "components": {
+    "schemas": {"Id": {"type": "integer", "const": 1}},
+    "responses": {"Empty": {"description": "empty"}}
+  }
+}

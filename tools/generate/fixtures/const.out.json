@@ -1,0 +1,6 @@
+{
+  "kind": {"type": "string", "description": "fixed", "enum": ["server"]},
+  "flag": {"enum": [false]},
+  "replaces_enum": {"enum": ["a"]},
+  "nested": {"properties": {"inner": {"enum": [7]}}}
+}

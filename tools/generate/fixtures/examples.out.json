@@ -1,0 +1,8 @@
+{
+  "first": {"type": "integer", "example": 2},
+  "keeps_example": {"type": "string", "example": "kept"},
+  "empty": {"type": "string"},
+  "object": {"type": "object", "example": {"id": 1, "name": "x"}},
+  "media": {"content": {"application/json": {"examples": {"ok": {"value": 1}}}}},
+  "property_named_examples": {"properties": {"examples": {"type": "array"}}}
+}
