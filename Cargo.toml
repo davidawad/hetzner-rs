@@ -1,6 +1,6 @@
 [package]
 name = "hetzner-rs"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 description = "Generated async and blocking Rust clients for the Hetzner Cloud API"
